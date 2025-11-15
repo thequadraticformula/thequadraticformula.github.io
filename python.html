@@ -122,9 +122,8 @@
 </head>
 <body>
 
-    <h1 class="text-3xl font-bold mb-4 text-center">Snake: A Genie's Greed</h1>
+    <h1 class="text-3xl font-bold mb-4 text-center">Genie's Greed</h1>
     <p class="text-lg text-gray-400 mb-6 text-center">Use Arrow Keys to collect the cursed gold!</p>
-    <p class="text-lg text-gray-400 mb-6 text-center">This is a snake game!</p>
 
     <div class="game-container">
         <div id="score-display">Score: 0</div>
@@ -281,24 +280,24 @@
 
         /**
          * Checks for all game-ending collision types
-         * @returns {boolean} True if a collision occurred
+         * @returns {string | null} 'wall', 'self', or null if no collision
          */
         function checkCollision() {
             const head = snake[0];
 
             // Wall collision
             if (head.x < 0 || head.x >= GRID_WIDTH || head.y < 0 || head.y >= GRID_HEIGHT) {
-                return true;
+                return 'wall';
             }
 
             // Self-collision
             for (let i = 1; i < snake.length; i++) {
                 if (head.x === snake[i].x && head.y === snake[i].y) {
-                    return true;
+                    return 'self';
                 }
             }
 
-            return false;
+            return null;
         }
 
         /**
@@ -318,8 +317,9 @@
             moveSnake();
 
             // 3. Check for game over
-            if (checkCollision()) {
-                gameOver();
+            const collisionReason = checkCollision(); // Capture the reason
+            if (collisionReason) {
+                gameOver(collisionReason); // Pass the reason to gameOver
                 return;
             }
 
@@ -333,11 +333,23 @@
 
         /**
          * Ends the game and displays the final score
+         * @param {string} reason - 'wall' or 'self'
          */
-        function gameOver() {
+        function gameOver(reason) {
             gameActive = false;
             overlayTitle.textContent = "GAME OVER";
-            overlayMessage.innerHTML = `Consumed by your own greed! Final Score: <span style="color:#FBBF24; font-weight:bold;">${score}</span><br> The genie's tail devours itself.`;
+            
+            let message = `Final Score: <span style="color:#FBBF24; font-weight:bold;">${score}</span><br>`;
+
+            if (reason === 'wall') {
+                message += "The genie's magic is limited; it hits the walls of the lamp.";
+            } else if (reason === 'self') {
+                message += "Consumed by your own greed! The genie's tail devours itself, a fitting end for a selfish spirit.";
+            } else {
+                message += "The magic fizzled out for an unknown reason.";
+            }
+
+            overlayMessage.innerHTML = message;
             startButton.textContent = "Try Again";
             overlay.style.display = 'flex';
         }
