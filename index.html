@@ -32,10 +32,22 @@
     <div class="bg-gray-800 w-full max-w-2xl h-full max-h-[700px] rounded-2xl shadow-2xl flex flex-col overflow-hidden border border-indigo-500/30">
         
         <!-- Header -->
-        <header class="bg-gray-900/80 backdrop-blur-sm p-4 border-b border-indigo-500/30 shadow-lg">
+        <header class="bg-gray-900/80 backdrop-blur-sm p-4 border-b border-indigo-500/30 shadow-lg relative">
             <h1 class="text-2xl font-bold text-center text-indigo-300">
                 🧞 The Wish-Ruining Genie 🧞
             </h1>
+
+            <!-- Dropdown Menu -->
+            <div class="absolute top-4 right-4">
+                <button id="games-button" class="bg-gray-700 text-indigo-300 hover:bg-gray-600 px-4 py-2 rounded-lg font-semibold text-sm transition-colors duration-200">
+                    More
+                </button>
+                <div id="games-menu" class="hidden absolute right-0 mt-2 w-48 bg-gray-700 rounded-lg shadow-xl border border-indigo-500/30 z-10">
+                    <a href="https://geniewishgame.github.io/blappyfird" class="block px-4 py-2 text-indigo-200 hover:bg-gray-600 hover:text-white rounded-t-lg">Blappy Fird</a>
+                    <a href="https://geniewishgame.github.io/python" class="block px-4 py-2 text-indigo-200 hover:bg-gray-600 hover:text-white">Python</a>
+                    <a href="https://geniewishgame.github.io/ttt" class="block px-4 py-2 text-indigo-200 hover:bg-gray-600 hover:text-white rounded-b-lg">Tic-Tac-Toe</a>
+                </div>
+            </div>
         </header>
         
         <!-- Chat Area -->
@@ -74,6 +86,9 @@
         const wishInput = document.getElementById('wish-input');
         const sendButton = document.getElementById('send-button');
         const loadingIndicator = document.getElementById('loading');
+        // Dropdown elements
+        const gamesButton = document.getElementById('games-button');
+        const gamesMenu = document.getElementById('games-menu');
 
         // --- API Configuration ---
         
@@ -262,6 +277,27 @@ Stay in character: be a little evil, and sound like you're enjoying the user's m
                 handleUserWish();
             }
         });
+
+        // --- Dropdown Listeners ---
+
+        // Toggle dropdown
+        gamesButton.addEventListener('click', (e) => {
+            e.stopPropagation(); // Stop click from bubbling to window
+            gamesMenu.classList.toggle('hidden');
+        });
+
+        // Stop clicks on the menu from closing it
+        gamesMenu.addEventListener('click', (e) => {
+            e.stopPropagation();
+        });
+
+        // Click-away listener to close the menu
+        window.addEventListener('click', () => {
+            if (!gamesMenu.classList.contains('hidden')) {
+                gamesMenu.classList.add('hidden');
+            }
+        });
+
 
         // --- Initial Render ---
         renderChat();
