@@ -60,6 +60,12 @@
             aspect-ratio: 800 / 600;
             border-radius: 8px; /* Rounded corners */
             background-color: #1E3A8A; /* Deep blue background */
+            /* cursor: none; <-- This is now controlled by JavaScript */
+        }
+
+        /* New class to hide cursor */
+        .cursor-hidden {
+            cursor: none;
         }
 
         /* Game Over/Start Overlay */
@@ -159,8 +165,16 @@
         
         <div id="overlay">
             <h2 id="overlay-title">Genie's Pong</h2>
-            <p id="overlay-message">You dare challenge me, mortal? <br> Move your mouse or finger to play.</p>
-            <button id="start-button" class="btn-start">Start Game</button>
+            <p id="overlay-message">You dare challenge me, mortal? <br> Choose your controls.</p>
+            
+            <!-- Control selection -->
+            <div id="controls-choice" class="flex flex-col space-y-4 w-full max-w-xs">
+                <button id="mouse-button" class="btn-start">Mouse / Touch (Locked Cursor)</button>
+                <button id="keys-button" class="btn-start">Arrow Keys</button>
+            </div>
+
+            <!-- Restart button (initially hidden) -->
+            <button id="restart-button" class="btn-start" style="display: none;">Play Again</button>
         </div>
     </div>
 
@@ -172,7 +186,11 @@
         const canvas = document.getElementById('gameCanvas');
         const ctx = canvas.getContext('2d');
         const overlay = document.getElementById('overlay');
-        const startButton = document.getElementById('start-button');
+        // Get new buttons
+        const mouseButton = document.getElementById('mouse-button');
+        const keysButton = document.getElementById('keys-button');
+        const restartButton = document.getElementById('restart-button');
+        const controlsChoice = document.getElementById('controls-choice');
         const overlayTitle = document.getElementById('overlay-title');
         const overlayMessage = document.getElementById('overlay-message');
         const scoreDisplay = document.getElementById('score-display');
@@ -183,6 +201,7 @@
         const BALL_RADIUS = 10;
         const WINNING_SCORE = 5;
         const GENIE_PADDLE_SPEED = 6; // AI Speed
+        const PLAYER_KEY_SPEED = 8; // Speed for keyboard controls
 
         // --- Colors ---
         const PLAYER_COLOR = '#a5b4fc'; // indigo-300
@@ -222,6 +241,9 @@
         // --- Game State ---
         let gameActive = false;
         let animationFrameId;
+        let isUpPressed = false;
+        let isDownPressed = false;
+        let controlMethod = ''; // 'mouse' or 'keys'
 
         // --- Drawing Functions ---
 
@@ -259,16 +281,30 @@
             scoreDisplay.textContent = `${player.score} - ${genie.score}`;
         }
 
-        function resetGame() {
+        function startGame(method) {
+            controlMethod = method;
             gameActive = true;
             player.score = 0;
             genie.score = 0;
             updateScore();
             resetBall();
             overlay.style.display = 'none';
+
+            if (controlMethod === 'mouse') {
+                canvas.classList.add('cursor-hidden');
+            } else {
+                canvas.classList.remove('cursor-hidden');
+            }
+
+            if (!animationFrameId) {
+                gameLoop();
+            }
         }
 
         function movePlayerPaddle(e) {
+            // Guard: Only run if game is active and control method is mouse
+            if (!gameActive || controlMethod !== 'mouse') return;
+
             let rect = canvas.getBoundingClientRect();
             let root = document.documentElement;
             
@@ -291,8 +327,34 @@
             }
         }
 
+        /**
+         * Moves the player paddle based on key presses
+         */
+        function updatePlayerFromKeys() {
+            // Guard: Only run if game is active and control method is keys
+            if (!gameActive || controlMethod !== 'keys') return;
+
+            if (isUpPressed) {
+                player.y -= PLAYER_KEY_SPEED;
+            }
+            if (isDownPressed) {
+                player.y += PLAYER_KEY_SPEED;
+            }
+
+            // Keep paddle within canvas bounds (redundant but safe)
+            if (player.y < 0) {
+                player.y = 0;
+            }
+            if (player.y + player.height > canvas.height) {
+                player.y = canvas.height - player.height;
+            }
+        }
+
         function update() {
             if (!gameActive) return;
+
+            // --- Player Movement (from keys) ---
+            updatePlayerFromKeys();
 
             // --- Ball Movement ---
             ball.x += ball.velocityX;
@@ -329,13 +391,13 @@
                 // Genie scores
                 genie.score++;
                 updateScore();
-                checkWin();
+                if (checkWin()) return; // Stop update if game over
                 resetBall();
             } else if (ball.x + ball.radius > canvas.width) {
                 // Player scores
                 player.score++;
                 updateScore();
-                checkWin();
+                if (checkWin()) return; // Stop update if game over
                 resetBall();
             }
 
@@ -375,13 +437,19 @@
         function checkWin() {
             if (player.score >= WINNING_SCORE || genie.score >= WINNING_SCORE) {
                 gameActive = false;
+                canvas.classList.remove('cursor-hidden'); // Always show cursor on game over
                 overlay.style.display = 'flex';
                 overlayTitle.textContent = player.score >= WINNING_SCORE ? "You Won!" : "Game Over";
                 overlayMessage.innerHTML = player.score >= WINNING_SCORE ?
                     `You defeated the genie! Impossible! <br>Final Score: ${player.score} - ${genie.score}` :
                     `The genie wins! As expected. <br>Final Score: ${player.score} - ${genie.score}`;
-                startButton.textContent = "Play Again";
+                
+                controlsChoice.style.display = 'none'; // Hide choices
+                restartButton.style.display = 'block'; // Show restart button
+
+                return true; // Signal game is over
             }
+            return false; // Signal game continues
         }
 
         function render() {
@@ -402,17 +470,31 @@
         }
 
         function gameLoop() {
+            if (!gameActive) {
+                cancelAnimationFrame(animationFrameId);
+                animationFrameId = null;
+                return;
+            }
             update();
             render();
             animationFrameId = requestAnimationFrame(gameLoop);
         }
 
         // --- Event Handlers ---
-        startButton.addEventListener('click', () => {
-            resetGame();
-            if (!animationFrameId) {
-                gameLoop();
-            }
+        mouseButton.addEventListener('click', () => {
+            startGame('mouse');
+        });
+
+        keysButton.addEventListener('click', () => {
+            startGame('keys');
+        });
+
+        restartButton.addEventListener('click', () => {
+            // Reset overlay to show choices
+            overlayTitle.textContent = "Genie's Pong";
+            overlayMessage.innerHTML = "You dare challenge me again, mortal? <br> Choose your controls.";
+            controlsChoice.style.display = 'flex';
+            restartButton.style.display = 'none';
         });
 
         // Player controls
@@ -420,6 +502,25 @@
         canvas.addEventListener('touchmove', (e) => {
             e.preventDefault(); // Prevent scrolling
             movePlayerPaddle(e);
+        });
+
+        // Keyboard controls
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'ArrowUp') {
+                e.preventDefault(); // Prevent scrolling
+                isUpPressed = true;
+            } else if (e.key === 'ArrowDown') {
+                e.preventDefault(); // Prevent scrolling
+                isDownPressed = true;
+            }
+        });
+
+        document.addEventListener('keyup', (e) => {
+            if (e.key === 'ArrowUp') {
+                isUpPressed = false;
+            } else if (e.key === 'ArrowDown') {
+                isDownPressed = false;
+            }
         });
 
         // Start game on first render
