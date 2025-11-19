@@ -1,1 +1,428 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Genie's Memory Match</title>
+    <!-- Load Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Load Inter font -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <style>
+        /* General Body and Font Setup */
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #111827; /* Dark background (gray-900) */
+            color: #E0E7FF; /* Light purple-blue text (indigo-200) */
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            margin: 0;
+            padding: 20px;
+            user-select: none;
+        }
 
+        /* --- TITLE STYLING (Increased Size and Gold Accent) --- */
+        h1 {
+            font-size: 3rem; /* text-4xl equivalent, significantly larger */
+            font-weight: 800;
+            margin-bottom: 0.5rem;
+            text-align: center;
+            color: #FBBF24; /* Cursed Gold accent color */
+            text-shadow: 0 0 10px rgba(251, 191, 36, 0.5); /* Subtle glow */
+        }
+
+        .subtitle {
+            font-size: 1.125rem;
+            color: #9CA3AF; /* text-gray-400 */
+            margin-bottom: 1.5rem;
+            text-align: center;
+            min-height: 1.5rem; /* Reserve space to prevent layout shift */
+            transition: color 0.5s;
+        }
+
+        /* Main Game Container */
+        .game-container {
+            border: 1px solid rgba(99, 102, 241, 0.3);
+            border-radius: 12px;
+            box-shadow: 0 10px 30px rgba(79, 70, 229, 0.5);
+            background-color: #1F2937; /* gray-800 */
+            padding: 24px;
+            max-width: 90%;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        /* Scoreboard and Controls */
+        #scoreboard {
+            width: 100%;
+            max-width: 500px;
+            display: flex;
+            justify-content: space-around;
+            margin-bottom: 24px;
+            padding: 12px;
+            background-color: #374151; /* gray-700 */
+            border-radius: 8px;
+            font-size: 1.125rem;
+            font-weight: 600;
+            color: #c7d2fe; /* indigo-200 */
+        }
+
+        /* Game Grid Styles */
+        #card-grid {
+            display: grid;
+            gap: 12px;
+            justify-content: center;
+            align-content: center;
+            width: 100%;
+        }
+        
+        .grid-8 {
+            grid-template-columns: repeat(4, 1fr);
+            max-width: 400px;
+        }
+
+        .grid-12 {
+            grid-template-columns: repeat(4, 1fr);
+            max-width: 550px;
+        }
+
+        /* --- Card Deal Animation Setup --- */
+        @keyframes card-deal-in {
+            0% { opacity: 0; transform: scale(0.5) translateY(50px); }
+            100% { opacity: 1; transform: scale(1) translateY(0); }
+        }
+
+        .card {
+            background-color: #374151;
+            border-radius: 8px;
+            aspect-ratio: 1 / 1;
+            cursor: pointer;
+            perspective: 1000px;
+            transform-style: preserve-3d;
+            transition: transform 0.5s;
+            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.5);
+            /* Initial state for deal animation */
+            opacity: 0;
+            transform: scale(0.5);
+            animation: card-deal-in 0.5s ease-out forwards; /* Apply animation */
+        }
+
+        /* Card Faces */
+        .card-inner {
+            position: relative;
+            width: 100%;
+            height: 100%;
+            text-align: center;
+            transition: transform 0.5s;
+            transform-style: preserve-3d;
+        }
+        
+        .card.flipped .card-inner {
+            transform: rotateY(180deg);
+        }
+
+        .card.matched {
+            cursor: default;
+            pointer-events: none;
+            opacity: 0.5; /* Fade matched cards slightly */
+        }
+        
+        .card-front, .card-back {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            backface-visibility: hidden;
+            border-radius: 8px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-size: 3rem;
+        }
+
+        /* Hidden (Back) Face */
+        .card-back {
+            background-color: #4F46E5; /* Indigo */
+            border: 3px solid #6366F1;
+            transform: rotateY(0deg);
+        }
+
+        /* Shown (Front) Face */
+        .card-front {
+            background-color: #9CA3AF;
+            transform: rotateY(180deg);
+            color: #FBBF24; /* Gold emoji color */
+        }
+
+        /* Buttons */
+        .btn-mode {
+            background-color: #6366F1;
+            color: white;
+            padding: 8px 16px;
+            font-size: 1rem;
+            font-weight: 500;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: background-color 0.2s;
+        }
+        .btn-mode:hover {
+            background-color: #4F46E5;
+        }
+        .btn-mode.active {
+            background-color: #FBBF24;
+            color: #111827;
+            font-weight: 700;
+            box-shadow: 0 0 15px rgba(251, 191, 36, 0.5);
+        }
+
+        .home-link {
+            margin-top: 24px;
+            font-size: 1.1rem;
+            color: #a5b4fc;
+            text-decoration: none;
+            transition: color 0.3s ease;
+        }
+        
+        .home-link:hover {
+            color: #c7d2fe;
+            text-decoration: underline;
+        }
+    </style>
+</head>
+<body>
+
+    <h1>🧞 Genie's Memory Match 🧞</h1>
+    <p class="subtitle">Find all pairs to win the Genie's favor.</p>
+
+    <div class="game-container">
+
+        <div id="mode-selector" class="flex space-x-4 mb-6">
+            <button id="mode-8" class="btn-mode active">8 Cards (Easy)</button>
+            <button id="mode-12" class="btn-mode">12 Cards (Medium)</button>
+        </div>
+
+        <div id="scoreboard">
+            <span id="flips-display">Flips: 0</span>
+            <span id="matches-display">Matches: 0</span>
+        </div>
+
+        <div id="card-grid" class="grid-8">
+            <!-- Cards will be generated here -->
+        </div>
+    </div>
+
+    <a href="https://themastercoder-exe.github.io" class="home-link">
+        &larr; Return to the main page
+    </a>
+
+    <script>
+        // --- DOM Elements ---
+        const cardGrid = document.getElementById('card-grid');
+        const flipsDisplay = document.getElementById('flips-display');
+        const matchesDisplay = document.getElementById('matches-display');
+        // Removed overlay elements: messageOverlay, overlayTitle, overlayMessage, startButton
+        const subtitle = document.querySelector('.subtitle');
+        const mode8Button = document.getElementById('mode-8');
+        const mode12Button = document.getElementById('mode-12');
+
+        // --- Game Constants & State ---
+        // Added more emojis for the 12-card mode
+        const GENIE_EMOJIS = ['🪔', '🧞', '✨', '👑', '🔮', '⭐', '💎', '🐪']; 
+        let gameMode = 8;
+        let currentCards = [];
+        let flippedCards = [];
+        let matchesFound = 0;
+        let totalFlips = 0;
+        let waiting = false;
+
+        // --- Utility Functions ---
+
+        /**
+         * Shuffles an array using the Fisher-Yates algorithm.
+         */
+        function shuffleArray(array) {
+            for (let i = array.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [array[i], array[j]] = [array[j], array[i]];
+            }
+        }
+
+        /**
+         * Initializes the card content based on the selected mode.
+         * @returns {string[]} An array of emoji pairs.
+         */
+        function generateCardContent(mode) {
+            const numPairs = mode / 2;
+            const selectedEmojis = GENIE_EMOJIS.slice(0, numPairs);
+            
+            // Duplicate the emojis to form pairs
+            let content = [...selectedEmojis, ...selectedEmojis];
+            shuffleArray(content);
+            return content;
+        }
+
+        /**
+         * Helper to update the main status display (subtitle).
+         */
+        function updateStatus(message, color = '#9CA3AF') {
+            subtitle.style.color = color;
+            subtitle.textContent = message;
+        }
+
+        // --- Game Logic ---
+
+        /**
+         * Renders the grid and sets up event listeners with the deal animation.
+         */
+        function renderCards() {
+            const cardContent = generateCardContent(gameMode);
+            cardGrid.innerHTML = '';
+            currentCards = [];
+            
+            cardGrid.classList.remove('grid-8', 'grid-12');
+            cardGrid.classList.add(`grid-${gameMode}`);
+
+            cardContent.forEach((emoji, index) => {
+                const card = document.createElement('div');
+                card.classList.add('card');
+                card.dataset.index = index;
+
+                card.innerHTML = `
+                    <div class="card-inner">
+                        <div class="card-front">${emoji}</div>
+                        <div class="card-back"></div>
+                    </div>
+                `;
+                
+                // Set animation delay for the "dealing" effect
+                card.style.animationDelay = `${index * 0.05}s`;
+
+                card.addEventListener('click', () => handleCardClick(card, emoji));
+                cardGrid.appendChild(card);
+                currentCards.push(card);
+            });
+        }
+
+        /**
+         * Resets state and starts a new game (triggers the deal animation).
+         */
+        function newGame() {
+            // Reset all game state
+            flippedCards = [];
+            matchesFound = 0;
+            totalFlips = 0;
+            waiting = false;
+            
+            flipsDisplay.textContent = `Flips: 0`;
+            matchesDisplay.textContent = `Matches: 0`;
+            updateStatus('Find all pairs to win the Genie\'s favor.');
+            
+            // Trigger the render and dealing animation
+            renderCards();
+        }
+
+        /**
+         * Handles the click event on a card.
+         */
+        function handleCardClick(card, emoji) {
+            // Prevent clicks if waiting (after 2 flips) or if card is already flipped/matched
+            if (waiting || card.classList.contains('flipped') || card.classList.contains('matched')) {
+                return;
+            }
+
+            // Apply flipped state
+            card.classList.add('flipped');
+            flippedCards.push({ card, emoji });
+
+            if (flippedCards.length === 2) {
+                totalFlips++;
+                flipsDisplay.textContent = `Flips: ${totalFlips}`;
+                waiting = true;
+
+                checkForMatch();
+            }
+        }
+
+        /**
+         * Checks if the two flipped cards match.
+         */
+        function checkForMatch() {
+            const [card1, card2] = flippedCards;
+
+            if (card1.emoji === card2.emoji) {
+                // Match found!
+                matchesFound++;
+                matchesDisplay.textContent = `Matches: ${matchesFound}`;
+                
+                // Mark cards as matched and keep them visible
+                card1.card.classList.add('matched');
+                card2.card.classList.add('matched');
+
+                // Reset for next turn
+                flippedCards = [];
+                waiting = false;
+
+                checkWinCondition();
+            } else {
+                // No match, flip back after a delay
+                setTimeout(() => {
+                    card1.card.classList.remove('flipped');
+                    card2.card.classList.remove('flipped');
+                    flippedCards = [];
+                    waiting = false;
+                }, 1000);
+            }
+        }
+
+        /**
+         * Checks if the player has won the game.
+         */
+        function checkWinCondition() {
+            if (matchesFound === gameMode / 2) {
+                gameOver(true);
+            }
+        }
+
+        /**
+         * Displays the game over message and resets.
+         */
+        function gameOver(won) {
+            if (won) {
+                updateStatus(`🎉 Wish Granted! You won in ${totalFlips} flips! The Genie is pleased. 🎉`, '#FBBF24');
+                // Auto-reset after a short delay so the player can see the win message
+                setTimeout(() => {
+                    newGame(); // Start a new game
+                }, 4000); 
+            }
+        }
+
+        // --- Event Listeners and Initialization ---
+
+        mode8Button.addEventListener('click', () => {
+            if (gameMode !== 8) {
+                gameMode = 8;
+                mode8Button.classList.add('active');
+                mode12Button.classList.remove('active');
+                newGame();
+            }
+        });
+
+        mode12Button.addEventListener('click', () => {
+            if (gameMode !== 12) {
+                gameMode = 12;
+                mode12Button.classList.add('active');
+                mode8Button.classList.remove('active');
+                newGame();
+            }
+        });
+
+        // Initial game start
+        newGame();
+
+    </script>
+</body>
+</html>
