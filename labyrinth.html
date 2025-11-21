@@ -1,0 +1,482 @@
+/* This game is different from the others*/
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>👻</text></svg>">
+    <title>The Wish Game: Labyrinth</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        /* --- THEME INHERITANCE --- */
+        body {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            margin: 0;
+            background-color: #111827;
+            font-family: 'Inter', sans-serif;
+            color: #E0E7FF;
+            user-select: none;
+            padding: 20px;
+        }
+
+        h1 {
+            font-size: 2.25rem;
+            font-weight: 700;
+            margin-bottom: 1rem;
+            text-align: center;
+            color: #a5b4fc;
+        }
+        
+        .subtitle {
+            font-size: 1.125rem;
+            color: #9CA3AF;
+            margin-bottom: 1.5rem;
+            text-align: center;
+            max-width: 600px;
+        }
+
+        .game-container {
+            border: 1px solid rgba(99, 102, 241, 0.3);
+            border-radius: 12px;
+            box-shadow: 0 10px 30px rgba(79, 70, 229, 0.5), 0 0 15px rgba(255, 255, 255, 0.1);
+            position: relative;
+            background-color: #1F2937;
+            padding: 24px;
+            box-sizing: border-box;
+            display: flex;
+            justify-content: center;
+        }
+
+        #gameCanvas {
+            display: block;
+            width: 400px; 
+            height: 400px;
+            border-radius: 8px;
+            background-color: #111827; /* Darker background for maze contrast */
+        }
+
+        #overlay {
+            position: absolute;
+            top: 24px; left: 24px; right: 24px; bottom: 24px;
+            background: rgba(31, 41, 55, 0.9);
+            backdrop-filter: blur(3px);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            text-align: center;
+            border-radius: 8px;
+            z-index: 10;
+            padding: 20px;
+        }
+        
+        #overlay h2 {
+            font-size: 2.5rem;
+            color: #FBBF24;
+            margin-bottom: 10px;
+            text-shadow: 0 0 10px rgba(251, 191, 36, 0.8);
+            margin-top: 0;
+        }
+
+        #overlay p {
+            font-size: 1.1rem;
+            margin-bottom: 20px;
+            line-height: 1.5;
+        }
+
+        .btn-start {
+            background-color: #4F46E5;
+            color: white;
+            padding: 12px 24px;
+            font-size: 1.25rem;
+            font-weight: bold;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: background-color 0.3s ease, transform 0.1s;
+            box-shadow: 0 4px 15px rgba(79, 70, 229, 0.6);
+        }
+
+        .btn-start:hover {
+            background-color: #6366F1;
+            transform: translateY(-2px);
+        }
+
+        .btn-start:active {
+            transform: translateY(0);
+        }
+
+        #score-display {
+            position: absolute;
+            top: 34px;
+            left: 0; right: 0;
+            text-align: center;
+            font-size: 2rem;
+            font-weight: bold;
+            color: #FBBF24;
+            text-shadow: 0 0 8px rgba(0, 0, 0, 0.8);
+            z-index: 5;
+            pointer-events: none;
+        }
+    </style>
+</head>
+<body>
+
+    <h1>Labyrinth of the Lamp</h1>
+    <p class="subtitle">Guide the Genie to collect all Wish Orbs. Avoid the wandering Shadows.<br>Use Arrow Keys to move.</p>
+
+    <div class="game-container">
+        <div id="score-display">Score: 0</div>
+        <canvas id="gameCanvas" width="400" height="400"></canvas>
+        
+        <div id="overlay">
+            <h2 id="overlay-title">Ready?</h2>
+            <p id="overlay-message">Collect all the gold to escape.<br>Don't touch the ghosts!</p>
+            <button id="start-button" class="btn-start">Start Game</button>
+        </div>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        const overlay = document.getElementById('overlay');
+        const startButton = document.getElementById('start-button');
+        const overlayTitle = document.getElementById('overlay-title');
+        const overlayMessage = document.getElementById('overlay-message');
+        const scoreDisplay = document.getElementById('score-display');
+
+        // --- Configuration ---
+        const TILE_SIZE = 20;
+        const ROWS = 20;
+        const COLS = 20;
+        const PACMAN_SPEED = 2; // Pixels per frame
+        const GHOST_SPEED = 2;
+
+        // Colors
+        const COLOR_WALL = '#1F2937'; // Surface color
+        const COLOR_DOT = '#FBBF24';
+        const COLOR_GENIE = '#8B5CF6';
+        const COLOR_GHOSTS = ['#a5b4fc', '#6366F1', '#9CA3AF']; // Theme colors
+
+        // 1 = Wall, 0 = Dot, 9 = Empty Path (no dot), 5 = Ghost House (no entry usually, but simplified here)
+        // 20x20 Grid
+        const LEVEL_MAP_TEMPLATE = [
+            [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1],
+            [1,0,0,0,0,0,0,0,0,1,1,0,0,0,0,0,0,0,0,1],
+            [1,0,1,1,1,0,1,1,0,1,1,0,1,1,0,1,1,1,0,1],
+            [1,0,1,1,1,0,1,1,0,1,1,0,1,1,0,1,1,1,0,1],
+            [1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1],
+            [1,0,1,1,0,1,0,1,1,1,1,1,1,0,1,0,1,1,0,1],
+            [1,0,0,0,0,1,0,0,0,1,1,0,0,0,1,0,0,0,0,1],
+            [1,1,1,1,0,1,1,1,9,1,1,9,1,1,1,0,1,1,1,1],
+            [1,1,1,1,0,1,9,9,9,9,9,9,9,9,1,0,1,1,1,1],
+            [1,0,0,0,0,1,9,1,1,9,9,1,1,9,1,0,0,0,0,1],
+            [1,1,1,1,0,1,9,1,9,9,9,9,1,9,1,0,1,1,1,1],
+            [1,1,1,1,0,1,9,1,1,1,1,1,1,9,1,0,1,1,1,1],
+            [1,0,0,0,0,0,0,0,0,1,1,0,0,0,0,0,0,0,0,1],
+            [1,0,1,1,0,1,1,1,0,1,1,0,1,1,1,0,1,1,0,1],
+            [1,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,1],
+            [1,1,0,1,0,1,0,1,1,1,1,1,1,0,1,0,1,0,1,1],
+            [1,0,0,0,0,1,0,0,0,1,1,0,0,0,1,0,0,0,0,1],
+            [1,0,1,1,1,1,1,1,0,1,1,0,1,1,1,1,1,1,0,1],
+            [1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1],
+            [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1]
+        ];
+
+        let map = [];
+        let gameActive = false;
+        let score = 0;
+        let animationId;
+        let frameCount = 0;
+        let totalDots = 0;
+
+        // Actors
+        let player = { x: 0, y: 0, dx: 0, dy: 0, nextDx: 0, nextDy: 0, mouthOpen: 0 };
+        let ghosts = [];
+
+        // --- Input Handling ---
+        document.addEventListener('keydown', (e) => {
+            if (!gameActive) return;
+            
+            // Prevent scrolling
+            if(["ArrowUp","ArrowDown","ArrowLeft","ArrowRight"].indexOf(e.code) > -1) {
+                e.preventDefault();
+            }
+
+            switch(e.code) {
+                case 'ArrowLeft':  player.nextDx = -1; player.nextDy = 0; break;
+                case 'ArrowRight': player.nextDx = 1;  player.nextDy = 0; break;
+                case 'ArrowUp':    player.nextDx = 0;  player.nextDy = -1; break;
+                case 'ArrowDown':  player.nextDx = 0;  player.nextDy = 1; break;
+            }
+        });
+
+        // --- Core Logic ---
+
+        function resetGame() {
+            // Deep copy map
+            map = LEVEL_MAP_TEMPLATE.map(row => [...row]);
+            
+            score = 0;
+            totalDots = 0;
+            scoreDisplay.textContent = `Score: 0`;
+            
+            // Count dots
+            for(let r=0; r<ROWS; r++) {
+                for(let c=0; c<COLS; c++) {
+                    if(map[r][c] === 0) totalDots++;
+                }
+            }
+
+            // Setup Player (Start at a specific empty spot, e.g., 1,1)
+            player = { 
+                x: TILE_SIZE * 1.5, 
+                y: TILE_SIZE * 1.5, 
+                dx: 0, dy: 0, 
+                nextDx: 0, nextDy: 0,
+                radius: 8,
+                mouthTimer: 0
+            };
+
+            // Setup Ghosts
+            ghosts = [
+                { x: TILE_SIZE * 9.5, y: TILE_SIZE * 9.5, dx: 0, dy: -1, color: COLOR_GHOSTS[0] },
+                { x: TILE_SIZE * 10.5, y: TILE_SIZE * 9.5, dx: 0, dy: -1, color: COLOR_GHOSTS[1] },
+                { x: TILE_SIZE * 9.5, y: TILE_SIZE * 10.5, dx: 1, dy: 0, color: COLOR_GHOSTS[2] }
+            ];
+
+            gameActive = true;
+            overlay.style.display = 'none';
+            cancelAnimationFrame(animationId);
+            gameLoop();
+        }
+
+        function isWall(c, r) {
+            if (c < 0 || c >= COLS || r < 0 || r >= ROWS) return true;
+            return map[r][c] === 1;
+        }
+
+        function canMove(x, y, dx, dy) {
+            // Check the tile we are moving INTO
+            // We use a small tolerance to allow smooth turning
+            const col = Math.floor((x + dx * (TILE_SIZE/2 + 1)) / TILE_SIZE);
+            const row = Math.floor((y + dy * (TILE_SIZE/2 + 1)) / TILE_SIZE);
+            return !isWall(col, row);
+        }
+
+        function updatePlayer() {
+            // 1. Try to change direction if queued
+            // Only allow turning if centered on a tile
+            const centerX = Math.floor(player.x / TILE_SIZE) * TILE_SIZE + TILE_SIZE/2;
+            const centerY = Math.floor(player.y / TILE_SIZE) * TILE_SIZE + TILE_SIZE/2;
+            const dist = Math.sqrt((player.x - centerX)**2 + (player.y - centerY)**2);
+
+            if (dist < 3) {
+                // We are roughly center, try to apply next direction
+                if (player.nextDx !== 0 || player.nextDy !== 0) {
+                    if (canMove(centerX, centerY, player.nextDx, player.nextDy)) {
+                        player.x = centerX;
+                        player.y = centerY;
+                        player.dx = player.nextDx;
+                        player.dy = player.nextDy;
+                        player.nextDx = 0; 
+                        player.nextDy = 0;
+                    }
+                }
+                
+                // Also check if current direction is hitting a wall
+                if (!canMove(centerX, centerY, player.dx, player.dy)) {
+                    player.dx = 0;
+                    player.dy = 0;
+                    // Snap to center to look clean
+                    player.x = centerX;
+                    player.y = centerY;
+                }
+            }
+
+            player.x += player.dx * PACMAN_SPEED;
+            player.y += player.dy * PACMAN_SPEED;
+
+            // Mouth animation
+            player.mouthTimer++;
+        }
+
+        function checkCollisions() {
+            // Dot Collision
+            const col = Math.floor(player.x / TILE_SIZE);
+            const row = Math.floor(player.y / TILE_SIZE);
+
+            if (map[row][col] === 0) {
+                map[row][col] = 9; // set to empty
+                score += 10;
+                scoreDisplay.textContent = `Score: ${score}`;
+                if (score === totalDots * 10) {
+                    gameOver(true);
+                }
+            }
+
+            // Ghost Collision
+            for (let g of ghosts) {
+                const dist = Math.sqrt((player.x - g.x)**2 + (player.y - g.y)**2);
+                if (dist < TILE_SIZE * 0.8) {
+                    gameOver(false);
+                }
+            }
+        }
+
+        function updateGhosts() {
+            ghosts.forEach(g => {
+                const centerX = Math.floor(g.x / TILE_SIZE) * TILE_SIZE + TILE_SIZE/2;
+                const centerY = Math.floor(g.y / TILE_SIZE) * TILE_SIZE + TILE_SIZE/2;
+                const dist = Math.sqrt((g.x - centerX)**2 + (g.y - centerY)**2);
+
+                if (dist < 3) {
+                    g.x = centerX;
+                    g.y = centerY;
+
+                    // Simple AI: Random valid direction that isn't backwards (unless stuck)
+                    const directions = [
+                        { dx: 0, dy: -1 }, // Up
+                        { dx: 0, dy: 1 },  // Down
+                        { dx: -1, dy: 0 }, // Left
+                        { dx: 1, dy: 0 }   // Right
+                    ];
+
+                    const validDirs = directions.filter(d => canMove(g.x, g.y, d.dx, d.dy));
+                    
+                    if (validDirs.length > 0) {
+                        // Filter out reverse direction to prevent jitter, unless it's a dead end
+                        const nonReverse = validDirs.filter(d => !(d.dx === -g.dx && d.dy === -g.dy));
+                        
+                        if (nonReverse.length > 0) {
+                            const choice = nonReverse[Math.floor(Math.random() * nonReverse.length)];
+                            g.dx = choice.dx;
+                            g.dy = choice.dy;
+                        } else {
+                            // Dead end, must reverse
+                            g.dx = -g.dx;
+                            g.dy = -g.dy;
+                        }
+                    } else {
+                        // Completely stuck (shouldn't happen in this map)
+                        g.dx = -g.dx;
+                        g.dy = -g.dy;
+                    }
+                }
+
+                g.x += g.dx * GHOST_SPEED;
+                g.y += g.dy * GHOST_SPEED;
+            });
+        }
+
+        function draw() {
+            // Clear
+            ctx.fillStyle = '#111827';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            // Draw Map
+            for(let r=0; r<ROWS; r++) {
+                for(let c=0; c<COLS; c++) {
+                    const cell = map[r][c];
+                    const x = c * TILE_SIZE;
+                    const y = r * TILE_SIZE;
+
+                    if (cell === 1) {
+                        // Wall
+                        ctx.fillStyle = COLOR_WALL;
+                        ctx.fillRect(x, y, TILE_SIZE, TILE_SIZE);
+                        // Add border for detail
+                        ctx.strokeStyle = '#374151';
+                        ctx.lineWidth = 1;
+                        ctx.strokeRect(x,y,TILE_SIZE,TILE_SIZE);
+                    } else if (cell === 0) {
+                        // Dot
+                        ctx.fillStyle = COLOR_DOT;
+                        ctx.beginPath();
+                        ctx.arc(x + TILE_SIZE/2, y + TILE_SIZE/2, 3, 0, Math.PI*2);
+                        ctx.fill();
+                    }
+                }
+            }
+
+            // Draw Player (Genie)
+            ctx.fillStyle = COLOR_GENIE;
+            ctx.beginPath();
+            
+            // Mouth logic
+            const angle = 0.2 * Math.PI * (Math.sin(player.mouthTimer * 0.2) + 1); 
+            let rotation = 0;
+            if (player.dx === 1) rotation = 0;
+            if (player.dx === -1) rotation = Math.PI;
+            if (player.dy === -1) rotation = -Math.PI/2;
+            if (player.dy === 1) rotation = Math.PI/2;
+
+            ctx.save();
+            ctx.translate(player.x, player.y);
+            ctx.rotate(rotation);
+            ctx.arc(0, 0, player.radius, angle, Math.PI * 2 - angle);
+            ctx.lineTo(0, 0);
+            ctx.fill();
+            ctx.restore();
+
+            // Draw Ghosts
+            ghosts.forEach(g => {
+                ctx.fillStyle = g.color;
+                ctx.beginPath();
+                ctx.arc(g.x, g.y - 2, 8, Math.PI, 0);
+                ctx.lineTo(g.x + 8, g.y + 8);
+                ctx.lineTo(g.x - 8, g.y + 8);
+                ctx.fill();
+                
+                // Eyes
+                ctx.fillStyle = 'white';
+                ctx.beginPath();
+                ctx.arc(g.x - 3, g.y - 3, 2.5, 0, Math.PI*2);
+                ctx.arc(g.x + 3, g.y - 3, 2.5, 0, Math.PI*2);
+                ctx.fill();
+            });
+        }
+
+        function gameLoop() {
+            if (!gameActive) return;
+
+            updatePlayer();
+            updateGhosts();
+            checkCollisions();
+            draw();
+
+            animationId = requestAnimationFrame(gameLoop);
+        }
+
+        function gameOver(win) {
+            gameActive = false;
+            cancelAnimationFrame(animationId);
+            
+            overlayTitle.textContent = win ? "YOU ESCAPED!" : "GAME OVER";
+            overlayMessage.innerHTML = win 
+                ? `You collected all wishes!<br>Score: <span style="color:#FBBF24">${score}</span>` 
+                : `The shadows caught you.<br>Score: <span style="color:#FBBF24">${score}</span>`;
+            
+            startButton.textContent = win ? "Play Again" : "Try Again";
+            overlay.style.display = 'flex';
+        }
+
+        // Setup
+        startButton.addEventListener('click', resetGame);
+        
+        // Initial Draw
+        resetGame();
+        gameActive = false; // Stop immediately to show menu
+        overlay.style.display = 'flex';
+        overlayTitle.textContent = "The Labyrinth";
+        overlayMessage.innerHTML = "Collect all gold orbs.<br>Avoid the shadows.";
+        startButton.textContent = "Start Game";
+
+    </script>
+</body>
+</html>
