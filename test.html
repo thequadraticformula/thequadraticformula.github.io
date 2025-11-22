@@ -51,7 +51,7 @@
 <body>
 
     <h1>Labyrinth of the Lamp</h1>
-    <p class="subtitle">Collect Orbs. Find <strong>Freeze Orbs</strong> (Cyan) to stop the ghosts.</p>
+    <p class="subtitle">Collect Orbs. Find <strong>Freeze Orbs</strong> (Cyan). Ghosts are incredibly fast!</p>
 
     <div class="game-container">
         <div id="hud">
@@ -62,7 +62,7 @@
         
         <div id="overlay">
             <h2 id="overlay-title">Ready?</h2>
-            <p id="overlay-message">Ghosts are faster now.<br>Use Freeze Orbs to survive!</p>
+            <p id="overlay-message">Ghosts move at 2.5x speed.<br>Good luck, you'll need it.</p>
             <button id="start-button" class="btn-start">Start Game</button>
         </div>
     </div>
@@ -84,8 +84,8 @@
         
         // Speed Settings
         const PLAYER_SPEED = 2; 
-        const GHOST_SPEED_WANDER = 2.1; // Faster than player
-        const GHOST_SPEED_HUNT = 2.5;   // Much faster than player
+        // Changed: Single speed, 2.5x Player Speed (5px per frame)
+        const GHOST_SPEED = PLAYER_SPEED * 2.5; 
 
         // AI Settings
         const HUNT_DURATION = 300; 
@@ -93,7 +93,7 @@
 
         // Freeze Settings
         const NUM_FREEZES = 2;
-        const FREEZE_DURATION = 300; // ~5 seconds (60fps * 5)
+        const FREEZE_DURATION = 300; // ~5 seconds
 
         // Colors
         const COLOR_WALL = '#1F2937'; 
@@ -186,7 +186,7 @@
                 }
             }
 
-            // 3. Count total objectives (Dots + Freeze Orbs)
+            // 3. Count total objectives
             for(let r=0; r<ROWS; r++) {
                 for(let c=0; c<COLS; c++) {
                     if(map[r][c] === 0 || map[r][c] === 5) totalDots++;
@@ -242,7 +242,6 @@
                 aiTimer = 0;
                 aiMode = (aiMode === 'HUNT') ? 'WANDER' : 'HUNT';
                 
-                // Only update display if not frozen (frozen status takes priority)
                 if (!isFrozen) updateStatusDisplay();
                 
                 ghosts.forEach(g => {
@@ -273,3 +272,260 @@
 
                 if (player.nextDx !== 0 || player.nextDy !== 0) {
                     if (!isWall(centerCol + player.nextDx, centerRow + player.nextDy)) {
+                        player.dx = player.nextDx;
+                        player.dy = player.nextDy;
+                        player.nextDx = 0; player.nextDy = 0;
+                    }
+                }
+                
+                if (isWall(centerCol + player.dx, centerRow + player.dy)) {
+                    player.dx = 0; 
+                    player.dy = 0;
+                }
+            }
+
+            player.x += player.dx * PLAYER_SPEED;
+            player.y += player.dy * PLAYER_SPEED;
+            player.mouthTimer++;
+
+            if (player.x < -TILE_SIZE/2) {
+                player.x = canvas.width + TILE_SIZE/2;
+            } else if (player.x > canvas.width + TILE_SIZE/2) {
+                player.x = -TILE_SIZE/2;
+            }
+        }
+
+        function updateGhosts() {
+            updateAIState();
+
+            // CHECK FREEZE STATE
+            if (isFrozen) {
+                freezeTimer--;
+                if (freezeTimer <= 0) {
+                    isFrozen = false;
+                    updateStatusDisplay();
+                }
+                return; // Skip movement if frozen
+            }
+
+            // GHOST MOVEMENT
+            ghosts.forEach(g => {
+                const col = Math.floor(g.x / TILE_SIZE);
+                const row = Math.floor(g.y / TILE_SIZE);
+                const centerX = col * TILE_SIZE + TILE_SIZE/2;
+                const centerY = row * TILE_SIZE + TILE_SIZE/2;
+                
+                const dist = Math.abs(g.x - centerX) + Math.abs(g.y - centerY);
+
+                if (dist < GHOST_SPEED) {
+                    g.x = centerX;
+                    g.y = centerY;
+
+                    const directions = [
+                        { dx: 0, dy: -1 }, 
+                        { dx: 0, dy: 1 },  
+                        { dx: -1, dy: 0 }, 
+                        { dx: 1, dy: 0 }   
+                    ];
+
+                    let validMoves = directions.filter(d => !isWall(col + d.dx, row + d.dy));
+                    const nonReverse = validMoves.filter(d => !(d.dx === -g.dx && d.dy === -g.dy));
+                    
+                    let candidates = nonReverse.length > 0 ? nonReverse : validMoves;
+                    let bestDir = candidates[0];
+
+                    if (candidates.length > 0) {
+                        if (aiMode === 'WANDER') {
+                            bestDir = candidates[Math.floor(Math.random() * candidates.length)];
+                        } else {
+                            // HUNT (with Tunnel Wrap Logic)
+                            let minDist = Infinity;
+                            candidates.forEach(d => {
+                                const targetX = (col + d.dx) * TILE_SIZE + TILE_SIZE/2;
+                                const targetY = (row + d.dy) * TILE_SIZE + TILE_SIZE/2;
+                                
+                                let dx = Math.abs(targetX - player.x);
+                                let dy = Math.abs(targetY - player.y);
+
+                                if (dx > canvas.width / 2) dx = canvas.width - dx;
+
+                                const distToPlayer = dx*dx + dy*dy;
+                                
+                                if (distToPlayer < minDist) {
+                                    minDist = distToPlayer;
+                                    bestDir = d;
+                                }
+                            });
+                        }
+                        g.dx = bestDir.dx;
+                        g.dy = bestDir.dy;
+                    }
+                }
+
+                g.x += g.dx * GHOST_SPEED;
+                g.y += g.dy * GHOST_SPEED;
+
+                // Ghost Teleport
+                if (g.x < -TILE_SIZE/2) g.x = canvas.width + TILE_SIZE/2;
+                else if (g.x > canvas.width + TILE_SIZE/2) g.x = -TILE_SIZE/2;
+            });
+        }
+
+        function checkCollisions() {
+            const pCol = Math.floor(player.x / TILE_SIZE);
+            const pRow = Math.floor(player.y / TILE_SIZE);
+
+            if (pCol >= 0 && pCol < COLS && pRow >= 0 && pRow < ROWS) {
+                const tile = map[pRow][pCol];
+                
+                if (tile === 0) {
+                    // Normal Dot
+                    map[pRow][pCol] = 9; 
+                    score += 10;
+                    scoreDisplay.textContent = `Score: ${score}`;
+                    if (score >= totalDots * 10) gameOver(true);
+                } 
+                else if (tile === 5) {
+                    // Freeze Orb
+                    map[pRow][pCol] = 9;
+                    score += 50;
+                    isFrozen = true;
+                    freezeTimer = FREEZE_DURATION;
+                    updateStatusDisplay();
+                    scoreDisplay.textContent = `Score: ${score}`;
+                }
+            }
+
+            for (let g of ghosts) {
+                const dist = Math.sqrt((player.x - g.x)**2 + (player.y - g.y)**2);
+                // Only kill if NOT frozen
+                if (!isFrozen && dist < TILE_SIZE * 0.8) gameOver(false);
+            }
+        }
+
+        function draw() {
+            ctx.fillStyle = '#111827';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            for(let r=0; r<ROWS; r++) {
+                for(let c=0; c<COLS; c++) {
+                    const cell = map[r][c];
+                    const x = c * TILE_SIZE;
+                    const y = r * TILE_SIZE;
+
+                    if (cell === 1) {
+                        ctx.fillStyle = COLOR_WALL;
+                        ctx.fillRect(x, y, TILE_SIZE, TILE_SIZE);
+                        ctx.strokeStyle = '#374151';
+                        ctx.lineWidth = 1;
+                        ctx.strokeRect(x,y,TILE_SIZE,TILE_SIZE);
+                    } else if (cell === 0) {
+                        ctx.fillStyle = COLOR_DOT;
+                        ctx.beginPath();
+                        ctx.arc(x + TILE_SIZE/2, y + TILE_SIZE/2, 3, 0, Math.PI*2);
+                        ctx.fill();
+                    } else if (cell === 5) {
+                        // Draw Freeze Orb
+                        ctx.fillStyle = COLOR_FREEZE;
+                        ctx.beginPath();
+                        ctx.arc(x + TILE_SIZE/2, y + TILE_SIZE/2, 5, 0, Math.PI*2);
+                        ctx.fill();
+                        ctx.shadowBlur = 10;
+                        ctx.shadowColor = COLOR_FREEZE;
+                        ctx.fill();
+                        ctx.shadowBlur = 0;
+                    }
+                }
+            }
+
+            // Player
+            ctx.fillStyle = COLOR_GENIE;
+            ctx.beginPath();
+            const angle = 0.2 * Math.PI * (Math.sin(player.mouthTimer * 0.2) + 1); 
+            let rotation = 0;
+            if (player.dx === 1) rotation = 0;
+            else if (player.dx === -1) rotation = Math.PI;
+            else if (player.dy === -1) rotation = -Math.PI/2;
+            else if (player.dy === 1) rotation = Math.PI/2;
+            
+            ctx.save();
+            ctx.translate(player.x, player.y);
+            ctx.rotate(rotation);
+            ctx.arc(0, 0, player.radius, angle, Math.PI * 2 - angle);
+            ctx.lineTo(0, 0);
+            ctx.fill();
+            ctx.restore();
+
+            // Ghosts
+            ghosts.forEach(g => {
+                // If frozen, use Cyan color
+                ctx.fillStyle = isFrozen ? COLOR_GHOST_FROZEN : g.color;
+                
+                ctx.beginPath();
+                ctx.arc(g.x, g.y - 2, 8, Math.PI, 0);
+                ctx.lineTo(g.x + 8, g.y + 8);
+                ctx.lineTo(g.x + 4, g.y + 4);
+                ctx.lineTo(g.x, g.y + 8);
+                ctx.lineTo(g.x - 4, g.y + 4);
+                ctx.lineTo(g.x - 8, g.y + 8);
+                ctx.fill();
+                
+                ctx.fillStyle = 'white';
+                ctx.beginPath();
+                ctx.arc(g.x - 3, g.y - 3, 2.5, 0, Math.PI*2);
+                ctx.arc(g.x + 3, g.y - 3, 2.5, 0, Math.PI*2);
+                ctx.fill();
+                
+                if (!isFrozen) {
+                    ctx.fillStyle = 'black';
+                    const dirX = (player.x - g.x) > 0 ? 1 : -1;
+                    const dirY = (player.y - g.y) > 0 ? 1 : -1;
+                    ctx.beginPath();
+                    ctx.arc(g.x - 3 + dirX, g.y - 3 + dirY, 1, 0, Math.PI*2);
+                    ctx.arc(g.x + 3 + dirX, g.y - 3 + dirY, 1, 0, Math.PI*2);
+                    ctx.fill();
+                } else {
+                    // Frozen eyes (X)
+                    ctx.strokeStyle = 'white';
+                    ctx.lineWidth = 1;
+                    ctx.beginPath();
+                    ctx.moveTo(g.x-4, g.y-4); ctx.lineTo(g.x-2, g.y-2);
+                    ctx.moveTo(g.x-2, g.y-4); ctx.lineTo(g.x-4, g.y-2);
+                    ctx.moveTo(g.x+2, g.y-4); ctx.lineTo(g.x+4, g.y-2);
+                    ctx.moveTo(g.x+4, g.y-4); ctx.lineTo(g.x+2, g.y-2);
+                    ctx.stroke();
+                }
+            });
+        }
+
+        function gameLoop() {
+            if (!gameActive) return;
+            updatePlayer();
+            updateGhosts();
+            checkCollisions();
+            draw();
+            animationId = requestAnimationFrame(gameLoop);
+        }
+
+        function gameOver(win) {
+            gameActive = false;
+            cancelAnimationFrame(animationId);
+            overlayTitle.textContent = win ? "YOU ESCAPED!" : "GAME OVER";
+            overlayMessage.innerHTML = win 
+                ? `All wishes granted.<br>Score: <span style="color:#FBBF24">${score}</span>` 
+                : `The shadows caught you.<br>Score: <span style="color:#FBBF24">${score}</span>`;
+            startButton.textContent = win ? "Play Again" : "Try Again";
+            overlay.style.display = 'flex';
+        }
+
+        startButton.addEventListener('click', resetGame);
+        resetGame();
+        gameActive = false;
+        overlay.style.display = 'flex';
+        overlayTitle.textContent = "The Labyrinth";
+        overlayMessage.innerHTML = "Collect gold orbs. Use arrow keys.<br>Find <span style='color:#06b6d4'>Cyan Orbs</span> to freeze ghosts.";
+        startButton.textContent = "Start Game";
+
+    </script>
+</body>
+</html>
