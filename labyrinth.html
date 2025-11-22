@@ -51,7 +51,7 @@
 <body>
 
     <h1>Labyrinth of the Lamp</h1>
-    <p class="subtitle">Collect Orbs. Beware: Shadows alternate between Hunting and Wandering.</p>
+    <p class="subtitle">Collect Orbs. Beware: Shadows move faster when Hunting!</p>
 
     <div class="game-container">
         <div id="hud">
@@ -81,8 +81,13 @@
         const TILE_SIZE = 20;
         const ROWS = 20;
         const COLS = 20;
-        const GENIE_SPEED = 2; 
-        const GHOST_SPEED = 2; 
+        
+        // --- SPEED CONFIGURATION ---
+        const PLAYER_SPEED = 2; 
+        // 95% of Player Speed (1.9px per frame)
+        const GHOST_SPEED_WANDER = PLAYER_SPEED * 0.95; 
+        // 120% of Player Speed (2.4px per frame)
+        const GHOST_SPEED_HUNT = PLAYER_SPEED * 1.2;    
 
         // AI Settings
         const HUNT_DURATION = 300; 
@@ -95,10 +100,9 @@
         const COLOR_GHOSTS = ['#a5b4fc', '#6366F1', '#9CA3AF']; 
 
         // Map: 1=Wall, 0=Dot, 9=Empty
-        // CHANGED: Row 9 (index 9) now starts and ends with '9' (Empty) instead of '1' (Wall)
         const LEVEL_MAP_TEMPLATE = [
             [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1],
-            [1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1],
+            [1,0,0,0,0,0,0,0,0,1,1,0,0,0,0,0,0,0,0,1],
             [1,0,1,1,1,0,1,1,0,1,1,0,1,1,0,1,1,1,0,1],
             [1,0,1,1,1,0,1,1,0,1,1,0,1,1,0,1,1,1,0,1],
             [1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1],
@@ -106,7 +110,7 @@
             [1,0,0,0,0,1,0,0,0,1,1,0,0,0,1,0,0,0,0,1],
             [1,1,1,1,0,1,1,1,9,1,1,9,1,1,1,0,1,1,1,1],
             [1,1,1,1,0,1,9,9,9,9,9,9,9,9,1,0,1,1,1,1],
-            [9,0,0,0,0,1,9,1,1,9,9,1,1,9,1,0,0,0,0,9], // <--- Tunnel Row
+            [9,0,0,0,0,1,9,1,1,9,9,1,1,9,1,0,0,0,0,9], // Tunnel Row
             [1,1,1,1,0,1,9,1,9,9,9,9,1,9,1,0,1,1,1,1],
             [1,1,1,1,0,1,9,1,1,1,1,1,1,9,1,0,1,1,1,1],
             [1,0,0,0,0,0,0,0,0,1,1,0,0,0,0,0,0,0,0,1],
@@ -162,14 +166,14 @@
                 }
             }
 
-            // Start Player at 1,1 (centered in tile)
+            // Start Player
             player = { 
                 x: TILE_SIZE * 1.5, y: TILE_SIZE * 1.5, 
                 dx: 0, dy: 0, nextDx: 0, nextDy: 0,
                 radius: 8, mouthTimer: 0
             };
 
-            // Start Ghosts (centered in tiles)
+            // Start Ghosts
             ghosts = [
                 { x: TILE_SIZE * 9.5, y: TILE_SIZE * 9.5, dx: 0, dy: -1, color: COLOR_GHOSTS[0] }, 
                 { x: TILE_SIZE * 10.5, y: TILE_SIZE * 9.5, dx: 0, dy: -1, color: COLOR_GHOSTS[1] }, 
@@ -183,9 +187,8 @@
         }
 
         function isWall(c, r) {
-            // CHANGED: Allow movement off-screen if we are in the Tunnel Row (Row 9)
+            // Allow movement off-screen if we are in the Tunnel Row (Row 9)
             if (r === 9 && (c < 0 || c >= COLS)) return false;
-
             if (c < 0 || c >= COLS || r < 0 || r >= ROWS) return true;
             return map[r][c] === 1;
         }
@@ -231,7 +234,7 @@
 
             const dist = Math.sqrt((player.x - centerX)**2 + (player.y - centerY)**2);
 
-            if (dist < GENIE_SPEED) {
+            if (dist < PLAYER_SPEED) {
                 player.x = centerX;
                 player.y = centerY;
 
@@ -249,19 +252,13 @@
                 }
             }
 
-            player.x += player.dx * GENIE_SPEED;
-            player.y += player.dy * GENIE_SPEED;
+            player.x += player.dx * PLAYER_SPEED;
+            player.y += player.dy * PLAYER_SPEED;
             player.mouthTimer++;
 
-            // --- TELEPORT CHECK ---
-            // If player goes off the left edge
-            if (player.x < -TILE_SIZE/2) {
-                player.x = canvas.width + TILE_SIZE/2;
-            }
-            // If player goes off the right edge
-            else if (player.x > canvas.width + TILE_SIZE/2) {
-                player.x = -TILE_SIZE/2;
-            }
+            // Teleport Player
+            if (player.x < -TILE_SIZE/2) player.x = canvas.width + TILE_SIZE/2;
+            else if (player.x > canvas.width + TILE_SIZE/2) player.x = -TILE_SIZE/2;
         }
 
         function updateGhosts() {
@@ -273,9 +270,14 @@
                 const centerX = col * TILE_SIZE + TILE_SIZE/2;
                 const centerY = row * TILE_SIZE + TILE_SIZE/2;
                 
+                // --- DYNAMIC SPEED SELECTION ---
+                // Choose speed based on current AI Mode
+                let currentSpeed = (aiMode === 'HUNT') ? GHOST_SPEED_HUNT : GHOST_SPEED_WANDER;
+
                 const dist = Math.abs(g.x - centerX) + Math.abs(g.y - centerY);
 
-                if (dist < GHOST_SPEED) {
+                // Use currentSpeed as the snap threshold to ensure smooth turns at any speed
+                if (dist < currentSpeed) {
                     g.x = centerX;
                     g.y = centerY;
 
@@ -314,16 +316,13 @@
                     }
                 }
 
-                g.x += g.dx * GHOST_SPEED;
-                g.y += g.dy * GHOST_SPEED;
+                // Apply Movement with Dynamic Speed
+                g.x += g.dx * currentSpeed;
+                g.y += g.dy * currentSpeed;
 
-                // --- TELEPORT CHECK FOR GHOSTS ---
-                if (g.x < -TILE_SIZE/2) {
-                    g.x = canvas.width + TILE_SIZE/2;
-                }
-                else if (g.x > canvas.width + TILE_SIZE/2) {
-                    g.x = -TILE_SIZE/2;
-                }
+                // Teleport Ghosts
+                if (g.x < -TILE_SIZE/2) g.x = canvas.width + TILE_SIZE/2;
+                else if (g.x > canvas.width + TILE_SIZE/2) g.x = -TILE_SIZE/2;
             });
         }
 
@@ -331,7 +330,6 @@
             const pCol = Math.floor(player.x / TILE_SIZE);
             const pRow = Math.floor(player.y / TILE_SIZE);
 
-            // Boundary check for dot collection (handle off-screen gracefully)
             if (pCol >= 0 && pCol < COLS && pRow >= 0 && pRow < ROWS) {
                 if (map[pRow][pCol] === 0) {
                     map[pRow][pCol] = 9; 
@@ -443,7 +441,7 @@
         gameActive = false;
         overlay.style.display = 'flex';
         overlayTitle.textContent = "The Labyrinth";
-        overlayMessage.innerHTML = "Collect the golden wish orbs. Use arrow keys to move.<br>Shadows hunt, then wander.";
+        overlayMessage.innerHTML = "Collect the golden wish orbs.<br>Shadows hunt fast, wander slow.";
         startButton.textContent = "Start Game";
 
     </script>
