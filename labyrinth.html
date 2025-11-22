@@ -84,9 +84,7 @@
         
         // --- SPEED CONFIGURATION ---
         const PLAYER_SPEED = 2; 
-        // 95% of Player Speed (1.9px per frame)
         const GHOST_SPEED_WANDER = PLAYER_SPEED * 0.95; 
-        // 120% of Player Speed (2.4px per frame)
         const GHOST_SPEED_HUNT = PLAYER_SPEED * 1.2;    
 
         // AI Settings
@@ -102,7 +100,7 @@
         // Map: 1=Wall, 0=Dot, 9=Empty
         const LEVEL_MAP_TEMPLATE = [
             [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1],
-            [1,0,0,0,0,0,0,0,0,1,1,0,0,0,0,0,0,0,0,1],
+            [1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1],
             [1,0,1,1,1,0,1,1,0,1,1,0,1,1,0,1,1,1,0,1],
             [1,0,1,1,1,0,1,1,0,1,1,0,1,1,0,1,1,1,0,1],
             [1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1],
@@ -270,13 +268,9 @@
                 const centerX = col * TILE_SIZE + TILE_SIZE/2;
                 const centerY = row * TILE_SIZE + TILE_SIZE/2;
                 
-                // --- DYNAMIC SPEED SELECTION ---
-                // Choose speed based on current AI Mode
                 let currentSpeed = (aiMode === 'HUNT') ? GHOST_SPEED_HUNT : GHOST_SPEED_WANDER;
-
                 const dist = Math.abs(g.x - centerX) + Math.abs(g.y - centerY);
 
-                // Use currentSpeed as the snap threshold to ensure smooth turns at any speed
                 if (dist < currentSpeed) {
                     g.x = centerX;
                     g.y = centerY;
@@ -298,12 +292,24 @@
                         if (aiMode === 'WANDER') {
                             bestDir = candidates[Math.floor(Math.random() * candidates.length)];
                         } else {
-                            // HUNT
+                            // --- FIXED HUNTING LOGIC ---
                             let minDist = Infinity;
                             candidates.forEach(d => {
                                 const targetX = (col + d.dx) * TILE_SIZE + TILE_SIZE/2;
                                 const targetY = (row + d.dy) * TILE_SIZE + TILE_SIZE/2;
-                                const distToPlayer = (targetX - player.x)**2 + (targetY - player.y)**2;
+                                
+                                // Calculate Wrap-Around Distance
+                                let dx = Math.abs(targetX - player.x);
+                                let dy = Math.abs(targetY - player.y);
+
+                                // If horizontal distance is greater than half the map width,
+                                // the shorter path is wrapping around the other side.
+                                if (dx > canvas.width / 2) {
+                                    dx = canvas.width - dx;
+                                }
+
+                                // Simple Euclidean distance approximation (squared)
+                                const distToPlayer = dx*dx + dy*dy;
                                 
                                 if (distToPlayer < minDist) {
                                     minDist = distToPlayer;
@@ -316,7 +322,6 @@
                     }
                 }
 
-                // Apply Movement with Dynamic Speed
                 g.x += g.dx * currentSpeed;
                 g.y += g.dy * currentSpeed;
 
