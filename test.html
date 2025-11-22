@@ -51,7 +51,7 @@
 <body>
 
     <h1>Labyrinth of the Lamp</h1>
-    <p class="subtitle">Collect Orbs. Find <strong>Freeze Orbs</strong> (Cyan). Ghosts are incredibly fast!</p>
+    <p class="subtitle">Collect Orbs. Beware: Tunnels close when the Shadows hunt.</p>
 
     <div class="game-container">
         <div id="hud">
@@ -62,7 +62,7 @@
         
         <div id="overlay">
             <h2 id="overlay-title">Ready?</h2>
-            <p id="overlay-message">Ghosts move at 2.5x speed.<br>Good luck, you'll need it.</p>
+            <p id="overlay-message">Collect all gold orbs.<br>Don't get caught.</p>
             <button id="start-button" class="btn-start">Start Game</button>
         </div>
     </div>
@@ -81,29 +81,20 @@
         const TILE_SIZE = 20;
         const ROWS = 20;
         const COLS = 20;
-        
-        // Speed Settings
-        const PLAYER_SPEED = 2; 
-       
-        const GHOST_SPEED = PLAYER_SPEED * 1.15; 
+        const GENIE_SPEED = 2; 
+        const GHOST_SPEED = 2; 
 
         // AI Settings
         const HUNT_DURATION = 300; 
         const WANDER_DURATION = 200; 
 
-        // Freeze Settings
-        const NUM_FREEZES = 2;
-        const FREEZE_DURATION = 300; // ~5 seconds
-
         // Colors
         const COLOR_WALL = '#1F2937'; 
         const COLOR_DOT = '#FBBF24';
-        const COLOR_FREEZE = '#06b6d4'; // Cyan
         const COLOR_GENIE = '#8B5CF6';
         const COLOR_GHOSTS = ['#a5b4fc', '#6366F1', '#9CA3AF']; 
-        const COLOR_GHOST_FROZEN = '#06b6d4';
 
-        // Map: 1=Wall, 0=Dot, 9=Empty, 5=Freeze Orb
+        // Map: 1=Wall, 0=Dot, 9=Empty
         const LEVEL_MAP_TEMPLATE = [
             [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1],
             [1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1],
@@ -114,7 +105,7 @@
             [1,0,0,0,0,1,0,0,0,1,1,0,0,0,1,0,0,0,0,1],
             [1,1,1,1,0,1,1,1,9,1,1,9,1,1,1,0,1,1,1,1],
             [1,1,1,1,0,1,9,9,9,9,9,9,9,9,1,0,1,1,1,1],
-            [0,0,0,0,0,1,9,1,1,9,9,1,1,9,1,0,0,0,0,0], // Tunnel row
+            [0,0,0,0,0,1,9,1,1,9,9,1,1,9,1,0,0,0,0,0], // <--- Tunnel Row (Index 9)
             [1,1,1,1,0,1,9,1,9,9,9,9,1,9,1,0,1,1,1,1],
             [1,1,1,1,0,1,9,1,1,1,1,1,1,9,1,0,1,1,1,1],
             [1,0,0,0,0,0,0,0,0,1,1,0,0,0,0,0,0,0,0,1],
@@ -136,8 +127,6 @@
         // AI State
         let aiMode = 'WANDER'; 
         let aiTimer = 0;
-        let isFrozen = false;
-        let freezeTimer = 0;
 
         // Actors
         let player = {};
@@ -163,46 +152,23 @@
             totalDots = 0;
             aiMode = 'WANDER';
             aiTimer = 0;
-            isFrozen = false;
-            freezeTimer = 0;
             scoreDisplay.textContent = `Score: 0`;
-
-            // 1. Find all dot locations
-            let dotLocations = [];
-            for(let r=0; r<ROWS; r++) {
-                for(let c=0; c<COLS; c++) {
-                    if(map[r][c] === 0) {
-                        dotLocations.push({r, c});
-                    }
-                }
-            }
-
-            // 2. Randomly replace dots with Freeze Orbs
-            for(let i=0; i<NUM_FREEZES; i++) {
-                if(dotLocations.length > 0) {
-                    const idx = Math.floor(Math.random() * dotLocations.length);
-                    const loc = dotLocations.splice(idx, 1)[0];
-                    map[loc.r][loc.c] = 5; // 5 = Freeze Orb
-                }
-            }
-
-            // 3. Count total objectives
-            for(let r=0; r<ROWS; r++) {
-                for(let c=0; c<COLS; c++) {
-                    if(map[r][c] === 0 || map[r][c] === 5) totalDots++;
-                }
-            }
-            
             updateStatusDisplay();
 
-            // Start Player
+            for(let r=0; r<ROWS; r++) {
+                for(let c=0; c<COLS; c++) {
+                    if(map[r][c] === 0) totalDots++;
+                }
+            }
+
+            // Start Player at 1,1 (centered in tile)
             player = { 
                 x: TILE_SIZE * 1.5, y: TILE_SIZE * 1.5, 
                 dx: 0, dy: 0, nextDx: 0, nextDy: 0,
                 radius: 8, mouthTimer: 0
             };
 
-            // Start Ghosts
+            // Start Ghosts (centered in tiles)
             ghosts = [
                 { x: TILE_SIZE * 9.5, y: TILE_SIZE * 9.5, dx: 0, dy: -1, color: COLOR_GHOSTS[0] }, 
                 { x: TILE_SIZE * 10.5, y: TILE_SIZE * 9.5, dx: 0, dy: -1, color: COLOR_GHOSTS[1] }, 
@@ -216,20 +182,19 @@
         }
 
         function isWall(c, r) {
-            if (r === 9 && (c < 0 || c >= COLS)) return false; // Tunnel
+            // Allow movement off-screen if we are in the Tunnel Row
+            if (r === 9 && (c < 0 || c >= COLS)) return false;
+
             if (c < 0 || c >= COLS || r < 0 || r >= ROWS) return true;
             return map[r][c] === 1;
         }
 
         function updateStatusDisplay() {
-            if (isFrozen) {
-                statusDisplay.textContent = "❄️ GHOSTS FROZEN";
-                statusDisplay.style.color = COLOR_FREEZE;
-            } else if (aiMode === 'HUNT') {
-                statusDisplay.textContent = "⚠️ SHADOWS ARE HUNTING";
+            if (aiMode === 'HUNT') {
+                statusDisplay.textContent = "⚠️ HUNTING (TUNNELS CLOSED)";
                 statusDisplay.style.color = "#ef4444";
             } else {
-                statusDisplay.textContent = "🔄 SHADOWS ARE WANDERING";
+                statusDisplay.textContent = "🔄 WANDERING (TUNNELS OPEN)";
                 statusDisplay.style.color = "#a5b4fc";
             }
         }
@@ -241,9 +206,31 @@
             if (aiTimer > limit) {
                 aiTimer = 0;
                 aiMode = (aiMode === 'HUNT') ? 'WANDER' : 'HUNT';
+                updateStatusDisplay();
                 
-                if (!isFrozen) updateStatusDisplay();
+                // --- TUNNEL LOGIC ---
+                const tunnelState = (aiMode === 'HUNT') ? 1 : 9;
                 
+                map[9][0] = tunnelState; 
+                map[9][COLS-1] = tunnelState;
+
+                // --- EMERGENCY TELEPORT LOGIC ---
+                // If tunnels just closed (HUNT mode), and player is in the tunnel area,
+                // snap them inside the map to column 1 or 18 (the safe cells next to entrance).
+                if (aiMode === 'HUNT') {
+                    // Check Left Tunnel Area (Col 0 or less)
+                    if (player.x < TILE_SIZE) {
+                        player.x = TILE_SIZE * 1.5; // Center of Col 1
+                        player.y = TILE_SIZE * 9.5; // Center of Row 9
+                    }
+                    // Check Right Tunnel Area (Col 19 or more)
+                    else if (player.x > (COLS - 1) * TILE_SIZE) {
+                        player.x = (COLS - 2) * TILE_SIZE + TILE_SIZE/2; // Center of Col 18
+                        player.y = TILE_SIZE * 9.5;
+                    }
+                }
+                // --------------------------------
+
                 ghosts.forEach(g => {
                     const col = Math.floor(g.x / TILE_SIZE);
                     const row = Math.floor(g.y / TILE_SIZE);
@@ -266,7 +253,7 @@
 
             const dist = Math.sqrt((player.x - centerX)**2 + (player.y - centerY)**2);
 
-            if (dist < PLAYER_SPEED) {
+            if (dist < GENIE_SPEED) {
                 player.x = centerX;
                 player.y = centerY;
 
@@ -284,13 +271,17 @@
                 }
             }
 
-            player.x += player.dx * PLAYER_SPEED;
-            player.y += player.dy * PLAYER_SPEED;
+            player.x += player.dx * GENIE_SPEED;
+            player.y += player.dy * GENIE_SPEED;
             player.mouthTimer++;
 
+            // --- TELEPORT CHECK ---
+            // If player goes off the left edge
             if (player.x < -TILE_SIZE/2) {
                 player.x = canvas.width + TILE_SIZE/2;
-            } else if (player.x > canvas.width + TILE_SIZE/2) {
+            }
+            // If player goes off the right edge
+            else if (player.x > canvas.width + TILE_SIZE/2) {
                 player.x = -TILE_SIZE/2;
             }
         }
@@ -298,17 +289,6 @@
         function updateGhosts() {
             updateAIState();
 
-            // CHECK FREEZE STATE
-            if (isFrozen) {
-                freezeTimer--;
-                if (freezeTimer <= 0) {
-                    isFrozen = false;
-                    updateStatusDisplay();
-                }
-                return; // Skip movement if frozen
-            }
-
-            // GHOST MOVEMENT
             ghosts.forEach(g => {
                 const col = Math.floor(g.x / TILE_SIZE);
                 const row = Math.floor(g.y / TILE_SIZE);
@@ -338,18 +318,12 @@
                         if (aiMode === 'WANDER') {
                             bestDir = candidates[Math.floor(Math.random() * candidates.length)];
                         } else {
-                            // HUNT (with Tunnel Wrap Logic)
+                            // HUNT
                             let minDist = Infinity;
                             candidates.forEach(d => {
                                 const targetX = (col + d.dx) * TILE_SIZE + TILE_SIZE/2;
                                 const targetY = (row + d.dy) * TILE_SIZE + TILE_SIZE/2;
-                                
-                                let dx = Math.abs(targetX - player.x);
-                                let dy = Math.abs(targetY - player.y);
-
-                                if (dx > canvas.width / 2) dx = canvas.width - dx;
-
-                                const distToPlayer = dx*dx + dy*dy;
+                                const distToPlayer = (targetX - player.x)**2 + (targetY - player.y)**2;
                                 
                                 if (distToPlayer < minDist) {
                                     minDist = distToPlayer;
@@ -365,9 +339,13 @@
                 g.x += g.dx * GHOST_SPEED;
                 g.y += g.dy * GHOST_SPEED;
 
-                // Ghost Teleport
-                if (g.x < -TILE_SIZE/2) g.x = canvas.width + TILE_SIZE/2;
-                else if (g.x > canvas.width + TILE_SIZE/2) g.x = -TILE_SIZE/2;
+                // --- TELEPORT CHECK FOR GHOSTS ---
+                if (g.x < -TILE_SIZE/2) {
+                    g.x = canvas.width + TILE_SIZE/2;
+                }
+                else if (g.x > canvas.width + TILE_SIZE/2) {
+                    g.x = -TILE_SIZE/2;
+                }
             });
         }
 
@@ -375,31 +353,19 @@
             const pCol = Math.floor(player.x / TILE_SIZE);
             const pRow = Math.floor(player.y / TILE_SIZE);
 
+            // Boundary check for dot collection (handle off-screen gracefully)
             if (pCol >= 0 && pCol < COLS && pRow >= 0 && pRow < ROWS) {
-                const tile = map[pRow][pCol];
-                
-                if (tile === 0) {
-                    // Normal Dot
+                if (map[pRow][pCol] === 0) {
                     map[pRow][pCol] = 9; 
                     score += 10;
                     scoreDisplay.textContent = `Score: ${score}`;
-                    if (score >= totalDots * 10) gameOver(true);
-                } 
-                else if (tile === 5) {
-                    // Freeze Orb
-                    map[pRow][pCol] = 9;
-                    score += 50;
-                    isFrozen = true;
-                    freezeTimer = FREEZE_DURATION;
-                    updateStatusDisplay();
-                    scoreDisplay.textContent = `Score: ${score}`;
+                    if (score === totalDots * 10) gameOver(true);
                 }
             }
 
             for (let g of ghosts) {
                 const dist = Math.sqrt((player.x - g.x)**2 + (player.y - g.y)**2);
-                // Only kill if NOT frozen
-                if (!isFrozen && dist < TILE_SIZE * 0.8) gameOver(false);
+                if (dist < TILE_SIZE * 0.8) gameOver(false);
             }
         }
 
@@ -424,16 +390,6 @@
                         ctx.beginPath();
                         ctx.arc(x + TILE_SIZE/2, y + TILE_SIZE/2, 3, 0, Math.PI*2);
                         ctx.fill();
-                    } else if (cell === 5) {
-                        // Draw Freeze Orb
-                        ctx.fillStyle = COLOR_FREEZE;
-                        ctx.beginPath();
-                        ctx.arc(x + TILE_SIZE/2, y + TILE_SIZE/2, 5, 0, Math.PI*2);
-                        ctx.fill();
-                        ctx.shadowBlur = 10;
-                        ctx.shadowColor = COLOR_FREEZE;
-                        ctx.fill();
-                        ctx.shadowBlur = 0;
                     }
                 }
             }
@@ -458,9 +414,7 @@
 
             // Ghosts
             ghosts.forEach(g => {
-                // If frozen, use Cyan color
-                ctx.fillStyle = isFrozen ? COLOR_GHOST_FROZEN : g.color;
-                
+                ctx.fillStyle = g.color;
                 ctx.beginPath();
                 ctx.arc(g.x, g.y - 2, 8, Math.PI, 0);
                 ctx.lineTo(g.x + 8, g.y + 8);
@@ -476,25 +430,13 @@
                 ctx.arc(g.x + 3, g.y - 3, 2.5, 0, Math.PI*2);
                 ctx.fill();
                 
-                if (!isFrozen) {
-                    ctx.fillStyle = 'black';
-                    const dirX = (player.x - g.x) > 0 ? 1 : -1;
-                    const dirY = (player.y - g.y) > 0 ? 1 : -1;
-                    ctx.beginPath();
-                    ctx.arc(g.x - 3 + dirX, g.y - 3 + dirY, 1, 0, Math.PI*2);
-                    ctx.arc(g.x + 3 + dirX, g.y - 3 + dirY, 1, 0, Math.PI*2);
-                    ctx.fill();
-                } else {
-                    // Frozen eyes (X)
-                    ctx.strokeStyle = 'white';
-                    ctx.lineWidth = 1;
-                    ctx.beginPath();
-                    ctx.moveTo(g.x-4, g.y-4); ctx.lineTo(g.x-2, g.y-2);
-                    ctx.moveTo(g.x-2, g.y-4); ctx.lineTo(g.x-4, g.y-2);
-                    ctx.moveTo(g.x+2, g.y-4); ctx.lineTo(g.x+4, g.y-2);
-                    ctx.moveTo(g.x+4, g.y-4); ctx.lineTo(g.x+2, g.y-2);
-                    ctx.stroke();
-                }
+                ctx.fillStyle = 'black';
+                const dirX = (player.x - g.x) > 0 ? 1 : -1;
+                const dirY = (player.y - g.y) > 0 ? 1 : -1;
+                ctx.beginPath();
+                ctx.arc(g.x - 3 + dirX, g.y - 3 + dirY, 1, 0, Math.PI*2);
+                ctx.arc(g.x + 3 + dirX, g.y - 3 + dirY, 1, 0, Math.PI*2);
+                ctx.fill();
             });
         }
 
@@ -523,7 +465,7 @@
         gameActive = false;
         overlay.style.display = 'flex';
         overlayTitle.textContent = "The Labyrinth";
-        overlayMessage.innerHTML = "Collect gold orbs. Use arrow keys.<br>Find <span style='color:#06b6d4'>Cyan Orbs</span> to freeze ghosts.";
+        overlayMessage.innerHTML = "Collect the golden wish orbs. Use arrow keys to move.<br>Shadows wander, then hunt.";
         startButton.textContent = "Start Game";
 
     </script>
