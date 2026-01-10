@@ -8,4 +8,6 @@ blappyfird.html is also flappy bird, but some of the text is different
 
 The python.html file is a clone of Snake.
 
-ttt.html is Tic-Tac-Toe
+ttt.html is Tic-Tac-Toe.
+
+NOTE: Some of the games are not working. This will soon be fixed.
