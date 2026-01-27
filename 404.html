@@ -340,7 +340,7 @@
                 obstacle.update();
                 obstacle.draw();
 
-                // Check for scoring
+                // Check if scoring happened
                 if (obstacle.x + obstacle.width < genie.x - genie.radius && !obstacle.scored) {
                     score++;
                     scoreDisplay.textContent = `Score: ${score}`;
@@ -353,7 +353,7 @@
                 }
             }
 
-            // 3. Update and draw genie
+            // 3. Update and draw genie (mindblow i know)
             genie.update();
             genie.draw();
 
