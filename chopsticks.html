@@ -1,0 +1,605 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>✌️</text></svg>">
+    <title>The Wish Game: Chopsticks</title>
+    
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    
+    <style>
+        :root {
+            --bg-dark: #111827;
+            --bg-card: #1f2937;
+            --accent: #10b981;
+            --accent-hover: #059669;
+            --text-main: #e0e7ff;
+            --text-dim: #9ca3af;
+            --hand-bg: #374151;
+            --highlight: rgba(16, 185, 129, 0.4);
+            --danger: #ef4444;
+        }
+
+        body {
+            background-color: var(--bg-dark);
+            font-family: 'Inter', sans-serif;
+            color: var(--text-main);
+            margin: 0;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            padding: 20px;
+            user-select: none;
+        }
+
+        h1 { color: var(--accent); margin: 0; font-size: 2rem; letter-spacing: 1px; }
+        .subtitle { color: var(--text-dim); margin-bottom: 30px; font-size: 0.9rem; text-align: center; }
+
+        .game-area {
+            display: flex;
+            flex-direction: column;
+            gap: 40px;
+            width: 100%;
+            max-width: 500px;
+            position: relative;
+        }
+
+        .player-zone {
+            background: var(--bg-card);
+            border-radius: 16px;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            transition: 0.3s;
+        }
+
+        .player-zone.active-turn {
+            border-color: var(--accent);
+            box-shadow: 0 0 20px rgba(16, 185, 129, 0.15);
+        }
+
+        .zone-label {
+            font-size: 0.8rem;
+            color: var(--text-dim);
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            margin-bottom: 15px;
+            font-weight: 700;
+        }
+
+        .hands-container {
+            display: flex;
+            gap: 20px;
+            justify-content: center;
+        }
+
+        .hand {
+            width: 100px;
+            height: 120px;
+            background: var(--hand-bg);
+            border-radius: 12px;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            cursor: pointer;
+            position: relative;
+            transition: transform 0.2s, background-color 0.2s;
+            border: 2px solid transparent;
+        }
+
+        .hand:hover {
+            transform: translateY(-2px);
+            background: #4b5563;
+        }
+
+        .hand.selected {
+            border-color: var(--accent);
+            background: var(--bg-dark);
+        }
+
+        /* Dead hand styling */
+        .hand.dead {
+            opacity: 0.5;
+            cursor: not-allowed;
+            background: #111827;
+        }
+
+        /* Targetable overrides dead/default to show interaction */
+        .hand.targetable {
+            border-color: var(--danger);
+            animation: pulse 1.5s infinite;
+            cursor: pointer !important;
+            opacity: 1 !important; 
+        }
+        
+        /* Different color for self-targeting (splitting) */
+        .player-zone.active-turn .hand.targetable {
+            border-color: #3b82f6; /* Blue for self/split */
+            animation: pulse-blue 1.5s infinite;
+        }
+
+        .finger-count {
+            font-size: 3rem;
+            line-height: 1;
+        }
+
+        .finger-bars {
+            display: flex;
+            gap: 4px;
+            margin-top: 10px;
+        }
+
+        .bar {
+            width: 8px;
+            height: 20px;
+            background: var(--text-dim);
+            border-radius: 4px;
+        }
+        .bar.active {
+            background: var(--accent);
+            box-shadow: 0 0 5px var(--accent);
+        }
+
+        .status-message {
+            height: 30px;
+            text-align: center;
+            color: var(--text-main);
+            font-weight: 600;
+        }
+
+        .split-modal {
+            position: fixed;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(0,0,0,0.9);
+            z-index: 50;
+            display: none;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .split-controls {
+            background: var(--bg-card);
+            padding: 30px;
+            border-radius: 12px;
+            border: 1px solid var(--accent);
+            width: 300px;
+            text-align: center;
+        }
+
+        .split-display {
+            display: flex;
+            justify-content: space-between;
+            margin: 20px 0;
+            font-size: 2rem;
+        }
+
+        input[type=range] {
+            width: 100%;
+            margin: 20px 0;
+            accent-color: var(--accent);
+        }
+
+        button {
+            background: var(--accent);
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 8px;
+            font-weight: bold;
+            cursor: pointer;
+            font-size: 1rem;
+        }
+        button:hover { background: var(--accent-hover); }
+
+        .game-over-modal {
+            position: fixed;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(0,0,0,0.9);
+            z-index: 100;
+            display: none;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+        }
+        .game-over-modal h2 { font-size: 3rem; color: var(--accent); margin-bottom: 20px; }
+
+        @keyframes pulse {
+            0% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.4); }
+            70% { box-shadow: 0 0 0 10px rgba(239, 68, 68, 0); }
+            100% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0); }
+        }
+        
+        @keyframes pulse-blue {
+            0% { box-shadow: 0 0 0 0 rgba(59, 130, 246, 0.4); }
+            70% { box-shadow: 0 0 0 10px rgba(59, 130, 246, 0); }
+            100% { box-shadow: 0 0 0 0 rgba(59, 130, 246, 0); }
+        }
+
+        .return-link { margin-top: 40px; color: var(--text-dim); text-decoration: none; }
+        .return-link:hover { color: var(--accent); }
+    </style>
+</head>
+<body>
+
+    <h1>Chopsticks ✌️</h1>
+    <p class="subtitle">Be the last one standing.</p>
+
+    <div class="status-message" id="status-text">Your Turn</div>
+
+    <div class="game-area">
+        <div class="player-zone" id="zone-cpu">
+            <div class="zone-label">CPU</div>
+            <div class="hands-container">
+                <div class="hand" id="cpu-l" onclick="handleTargetClick('cpu', 0)">
+                    <div class="finger-count" id="disp-cpu-l">1</div>
+                    <div class="finger-bars" id="bar-cpu-l"></div>
+                </div>
+                <div class="hand" id="cpu-r" onclick="handleTargetClick('cpu', 1)">
+                    <div class="finger-count" id="disp-cpu-r">1</div>
+                    <div class="finger-bars" id="bar-cpu-r"></div>
+                </div>
+            </div>
+        </div>
+
+        <div class="player-zone active-turn" id="zone-p1">
+            <div class="zone-label">YOU</div>
+            <div class="hands-container">
+                <div class="hand" id="p1-l" onclick="handleSourceClick(0)">
+                    <div class="finger-count" id="disp-p1-l">1</div>
+                    <div class="finger-bars" id="bar-p1-l"></div>
+                </div>
+                <div class="hand" id="p1-r" onclick="handleSourceClick(1)">
+                    <div class="finger-count" id="disp-p1-r">1</div>
+                    <div class="finger-bars" id="bar-p1-r"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="split-modal" id="split-modal">
+        <div class="split-controls">
+            <h3>Distribute Points</h3>
+            <div class="split-display">
+                <span id="split-val-l">1</span>
+                <span>-</span>
+                <span id="split-val-r">1</span>
+            </div>
+            <input type="range" id="split-range" min="0" max="4" step="1" oninput="updateSplitPreview()">
+            <div style="display:flex; gap:10px; justify-content:center;">
+                <button onclick="confirmSplit()">Confirm</button>
+                <button onclick="cancelSplit()" style="background:#4b5563">Cancel</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="game-over-modal" id="game-over">
+        <h2 id="winner-text">YOU WIN</h2>
+        <button onclick="resetGame()">Play Again</button>
+    </div>
+
+    <a href="https://geniewishgame.github.io" class="return-link">&larr; Return to Main Menu</a>
+
+    <script>
+        const fingersMap = { 0: '✊', 1: '☝️', 2: '✌️', 3: '🤟', 4: '🖖', 5: '🖐' };
+        
+        let gameState = {
+            p1: [1, 1],
+            cpu: [1, 1],
+            turn: 'p1' 
+        };
+
+        let selectedHandIndex = null;
+        let splitTotal = 0;
+
+        function init() {
+            render();
+        }
+
+        function render() {
+            renderHand('p1', 0);
+            renderHand('p1', 1);
+            renderHand('cpu', 0);
+            renderHand('cpu', 1);
+
+            document.getElementById('zone-p1').classList.toggle('active-turn', gameState.turn === 'p1');
+            document.getElementById('zone-cpu').classList.toggle('active-turn', gameState.turn === 'cpu');
+            
+            if (gameState.turn === 'p1') {
+                if (selectedHandIndex === null) {
+                    document.getElementById('status-text').innerText = "Select a hand to start";
+                } else {
+                    document.getElementById('status-text').innerText = "Select enemy to Attack or self to Split";
+                }
+            } else {
+                document.getElementById('status-text').innerText = "CPU Thinking...";
+            }
+        }
+
+        function renderHand(player, index) {
+            const val = gameState[player][index];
+            const prefix = player === 'p1' ? 'p1' : 'cpu';
+            const suffix = index === 0 ? 'l' : 'r';
+            const elId = `${prefix}-${suffix}`;
+            
+            const handEl = document.getElementById(elId);
+            const dispEl = document.getElementById(`disp-${elId}`);
+            const barEl = document.getElementById(`bar-${elId}`);
+
+            dispEl.innerText = fingersMap[val] || val;
+            
+            // Remove classes first to reset state
+            handEl.classList.remove('dead', 'selected', 'targetable');
+            
+            // Dead state
+            if (val === 0) {
+                handEl.classList.add('dead');
+                dispEl.style.opacity = '0.3';
+            } else {
+                dispEl.style.opacity = '1';
+            }
+
+            // Bars
+            barEl.innerHTML = '';
+            for(let i=0; i<4; i++) {
+                const b = document.createElement('div');
+                b.className = `bar ${i < val ? 'active' : ''}`;
+                barEl.appendChild(b);
+            }
+
+            // Selected State
+            if (player === 'p1' && index === selectedHandIndex) {
+                handEl.classList.add('selected');
+            }
+            
+            // Targetable State
+            if (gameState.turn === 'p1' && selectedHandIndex !== null) {
+                // Enemy hands are targetable if alive
+                if (player === 'cpu' && val > 0) handEl.classList.add('targetable');
+                
+                // Own hands are targetable (for Split) if not self
+                if (player === 'p1' && index !== selectedHandIndex) handEl.classList.add('targetable'); 
+            }
+        }
+
+        function handleSourceClick(index) {
+            if (gameState.turn !== 'p1') return;
+
+            // Case 1: Selecting a source hand (nothing selected yet)
+            if (selectedHandIndex === null) {
+                if (gameState.p1[index] > 0) {
+                    selectedHandIndex = index;
+                    render();
+                }
+                return;
+            }
+
+            // Case 2: Deselecting the currently selected hand
+            if (selectedHandIndex === index) {
+                selectedHandIndex = null;
+                render();
+                return;
+            }
+
+            // Case 3: Clicking the *other* hand while one is selected -> SPLIT
+            // This is allowed even if the target hand is dead (revival)
+            openSplitModal();
+        }
+
+        function handleTargetClick(player, index) {
+            if (gameState.turn !== 'p1') return;
+            if (selectedHandIndex === null) return;
+
+            // Attack Logic (Player clicking CPU)
+            if (player === 'cpu') {
+                if (gameState.cpu[index] === 0) return; // Cannot attack dead hand
+                performAttack('p1', selectedHandIndex, index);
+            }
+        }
+
+        function performAttack(attacker, sourceIdx, targetIdx) {
+            const attArr = attacker === 'p1' ? gameState.p1 : gameState.cpu;
+            const defArr = attacker === 'p1' ? gameState.cpu : gameState.p1;
+
+            const val = attArr[sourceIdx];
+            let targetVal = defArr[targetIdx];
+            
+            targetVal += val;
+            if (targetVal >= 5) targetVal = 0; // Knock out
+
+            defArr[targetIdx] = targetVal;
+            
+            selectedHandIndex = null;
+            render();
+            
+            if (!checkWin()) {
+                switchTurn();
+            }
+        }
+
+        function switchTurn() {
+            gameState.turn = gameState.turn === 'p1' ? 'cpu' : 'p1';
+            render();
+            if (gameState.turn === 'cpu') {
+                setTimeout(cpuTurn, 1000);
+            }
+        }
+
+        function openSplitModal() {
+            splitTotal = gameState.p1[0] + gameState.p1[1];
+            
+            if (splitTotal < 2) {
+                // Cannot split if total points < 2 (e.g. 1-0 split to 0-1 is invalid swap)
+                alert("Not enough points to split!");
+                return;
+            }
+
+            const range = document.getElementById('split-range');
+            range.max = splitTotal;
+            // Set initial value to current left hand value
+            range.value = gameState.p1[0];
+            
+            updateSplitPreview();
+            document.getElementById('split-modal').style.display = 'flex';
+        }
+
+        function updateSplitPreview() {
+            let l = parseInt(document.getElementById('split-range').value);
+            let r = splitTotal - l;
+            
+            // Validate: Hands cannot exceed 4 fingers
+            // If dragging range causes >4, adjust it
+            if (r > 4) { 
+                l = splitTotal - 4;
+                document.getElementById('split-range').value = l;
+                r = 4;
+            }
+            if (l > 4) {
+                l = 4;
+                document.getElementById('split-range').value = l;
+                r = splitTotal - 4;
+            }
+
+            document.getElementById('split-val-l').innerText = fingersMap[l] || l;
+            document.getElementById('split-val-r').innerText = fingersMap[r] || r;
+        }
+
+        function confirmSplit() {
+            const l = parseInt(document.getElementById('split-range').value);
+            const r = splitTotal - l;
+            
+            // Rule: "The new point distribution must differ from the old"
+            // Also cannot swap (e.g. 1-3 becoming 3-1 is often considered a swap/invalid in basic rules, 
+            // but strict rules usually just say "differ from old").
+            // Let's enforce strictly different.
+            if (l === gameState.p1[0] && r === gameState.p1[1]) {
+                alert("Distribution must change!");
+                return; 
+            }
+            
+            // Check for simple swap (e.g. 1,3 -> 3,1)
+            // Some variations allow swap, standard usually implies meaningful change. 
+            // Prompt says "a player can't simply swap points".
+            if (l === gameState.p1[1] && r === gameState.p1[0]) {
+                 alert("Cannot simply swap points!");
+                 return;
+            }
+
+            gameState.p1[0] = l;
+            gameState.p1[1] = r;
+            
+            document.getElementById('split-modal').style.display = 'none';
+            selectedHandIndex = null;
+            render();
+            switchTurn();
+        }
+
+        function cancelSplit() {
+            document.getElementById('split-modal').style.display = 'none';
+            selectedHandIndex = null;
+            render();
+        }
+
+        function checkWin() {
+            const p1Dead = gameState.p1[0] === 0 && gameState.p1[1] === 0;
+            const cpuDead = gameState.cpu[0] === 0 && gameState.cpu[1] === 0;
+
+            if (p1Dead || cpuDead) {
+                document.getElementById('game-over').style.display = 'flex';
+                document.getElementById('winner-text').innerText = cpuDead ? "YOU WIN" : "CPU WINS";
+                return true;
+            }
+            return false;
+        }
+
+        function cpuTurn() {
+            const moves = [];
+            const ai = gameState.cpu;
+            const pl = gameState.p1;
+
+            // Generate Attack Moves
+            for(let i=0; i<2; i++) {
+                if(ai[i] === 0) continue;
+                for(let j=0; j<2; j++) {
+                    if(pl[j] === 0) continue;
+                    let nextVal = pl[j] + ai[i];
+                    let kill = false;
+                    if (nextVal >= 5) { nextVal = 0; kill = true; }
+                    moves.push({ type: 'atk', src: i, tgt: j, kill: kill, val: nextVal });
+                }
+            }
+
+            // Generate Split Moves
+            const total = ai[0] + ai[1];
+            if (total >= 2) {
+                for(let l=0; l<=total; l++) {
+                    let r = total - l;
+                    if(l > 4 || r > 4) continue;
+                    if(l === ai[0] && r === ai[1]) continue; // No change
+                    if(l === ai[1] && r === ai[0]) continue; // Swap
+                    
+                    moves.push({ type: 'split', l: l, r: r });
+                }
+            }
+
+            // Evaluation
+            moves.sort((a, b) => {
+                const score = (m) => {
+                    if (m.type === 'atk') {
+                        if (m.kill) {
+                            // Instant win?
+                            const otherIdx = m.tgt === 0 ? 1 : 0;
+                            if (pl[otherIdx] === 0) return 1000; // Win
+                            return 100; // Kill hand
+                        }
+                        return 10;
+                    }
+                    if (m.type === 'split') {
+                        // Prefer reviving dead hand
+                        if (ai[0] === 0 || ai[1] === 0) {
+                             if (m.l > 0 && m.r > 0) return 50;
+                        }
+                        return 5;
+                    }
+                    return 0;
+                };
+                return score(b) - score(a);
+            });
+
+            if (moves.length === 0) {
+                // Should not happen unless game over
+                return;
+            }
+
+            const best = moves[0];
+            
+            if (best.type === 'atk') {
+                performAttack('cpu', best.src, best.tgt);
+            } else {
+                gameState.cpu[0] = best.l;
+                gameState.cpu[1] = best.r;
+                render();
+                switchTurn();
+            }
+        }
+
+        function resetGame() {
+            gameState.p1 = [1, 1];
+            gameState.cpu = [1, 1];
+            gameState.turn = 'p1';
+            selectedHandIndex = null;
+            document.getElementById('game-over').style.display = 'none';
+            render();
+        }
+
+        init();
+
+    </script>
+</body>
+</html>
