@@ -10,4 +10,4 @@ The python.html file is a clone of Snake.
 
 ttt.html is Tic-Tac-Toe.
 
-NOTE: Some of the games are not working. This will soon be fixed.
+The genie doesn't work because I don't know how to use Github secrets, so the API key may or may not be in the client-side code.
